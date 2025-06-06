@@ -1,6 +1,6 @@
 "use client"
 
-import { Dialog, DialogContent } from "@/components/ui/dialog"
+import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog" // ADDED DialogTitle
 import { Button } from "@/components/ui/button"
 import { X, Clock } from "lucide-react"
 
@@ -39,12 +39,14 @@ export function TimeStatsModal({ open, onOpenChange, currentTime, timeStats }: T
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="wordle-bg wordle-text wordle-border max-w-md border-2">
+        {/* ADDED: DialogTitle for accessibility */}
+        <DialogTitle className="text-2xl font-wordle-bold flex items-center gap-2">
+          <Clock className="h-6 w-6" />
+          Time Spent
+        </DialogTitle>
+        
         <div className="p-4">
-          <div className="flex justify-between items-center mb-6">
-            <h2 className="text-2xl font-wordle-bold flex items-center gap-2">
-              <Clock className="h-6 w-6" />
-              Time Spent
-            </h2>
+          <div className="flex justify-end items-center mb-6">
             <Button
               variant="ghost"
               size="sm"

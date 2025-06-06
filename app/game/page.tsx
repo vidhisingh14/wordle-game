@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react"
 import { Button } from "@/components/ui/button"
-import { Dialog, DialogContent } from "@/components/ui/dialog"
+import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog"
 import { GameGrid } from "@/components/game-grid"
 import { VirtualKeyboard } from "@/components/virtual-keyboard"
 import { useGameLogic } from "@/hooks/use-game-logic"
@@ -13,7 +13,7 @@ export default function GamePage() {
   const [showRules, setShowRules] = useState(true)
   const [showTimeStats, setShowTimeStats] = useState(false)
   const { currentTime, timeStats, isActive } = useTimeTracking()
-  const { currentGuess, guesses, currentRow, gameStatus, keyboardStatus, handleKeyPress, submitGuess, resetGame } =
+  const { currentGuess, guesses, currentRow, gameStatus, keyboardStatus, targetWord, handleKeyPress, submitGuess, resetGame } =
     useGameLogic()
 
   const handleKeyDown = useCallback(
@@ -46,8 +46,9 @@ export default function GamePage() {
       {/* Rules Dialog */}
       <Dialog open={showRules} onOpenChange={setShowRules}>
         <DialogContent className="wordle-bg wordle-text wordle-border max-w-md border-2">
+          <DialogTitle className="text-2xl font-wordle-bold mb-4">How To Play</DialogTitle>
+          
           <div className="p-2">
-            <h2 className="text-2xl font-wordle-bold mb-4">How To Play</h2>
             <p className="mb-4 text-base font-wordle-normal">Guess the Wordle in 6 tries.</p>
 
             <ul className="space-y-2 mb-6 text-sm font-wordle-normal">
@@ -121,7 +122,7 @@ export default function GamePage() {
         </DialogContent>
       </Dialog>
 
-      {/* Time Stats Modal - Now receives props */}
+      {/* Time Stats Modal */}
       <TimeStatsModal
         open={showTimeStats}
         onOpenChange={setShowTimeStats}
@@ -163,7 +164,6 @@ export default function GamePage() {
           </div>
           <div className="text-xs text-gray-500 mt-2 text-center">
             <span className="font-wordle-normal">Version 10</span>
-            {/* Debug info */}
             <span className="ml-4 text-green-400">
               Timer: {currentTime}s {isActive ? "🟢" : "🔴"}
             </span>
@@ -173,11 +173,29 @@ export default function GamePage() {
 
       {/* Game Content */}
       <main className="max-w-md mx-auto p-4">
-        <GameGrid guesses={guesses} currentGuess={currentGuess} currentRow={currentRow} />
+        <GameGrid guesses={guesses} currentGuess={currentGuess} currentRow={currentRow} targetWord={targetWord} />
 
         {gameStatus !== "playing" && (
           <div className="text-center my-6">
-            <p className="text-xl font-wordle-bold mb-3">{gameStatus === "won" ? "Congratulations!" : "Game Over!"}</p>
+            {gameStatus === "won" ? (
+              // WIN MESSAGE
+              <>
+                <p className="text-xl font-wordle-bold mb-3 text-green-400">🎉 Congratulations!</p>
+                <p className="text-sm font-wordle-medium mb-4 text-gray-300">
+                  You guessed <span className="text-green-400 font-wordle-bold">{targetWord}</span> correctly!
+                </p>
+              </>
+            ) : (
+              // LOSE MESSAGE WITH TARGET WORD REVEAL
+              <>
+                <p className="text-xl font-wordle-bold mb-3">Game Over!</p>
+                <p className="text-sm font-wordle-medium mb-2 text-gray-300">The word was:</p>
+                <p className="text-2xl font-wordle-bold mb-4 text-white-400 tracking-wider">
+                  {targetWord}
+                </p>
+              </>
+            )}
+            
             <Button
               onClick={resetGame}
               className="bg-green-600 hover:bg-green-700 text-white font-wordle-medium px-6 py-2 rounded-full"

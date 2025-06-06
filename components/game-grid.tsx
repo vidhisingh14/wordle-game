@@ -2,9 +2,10 @@ interface GameGridProps {
   guesses: string[]
   currentGuess: string
   currentRow: number
+  targetWord: string // ADDED: Pass the target word as a prop
 }
 
-export function GameGrid({ guesses, currentGuess, currentRow }: GameGridProps) {
+export function GameGrid({ guesses, currentGuess, currentRow, targetWord }: GameGridProps) {
   const rows = Array.from({ length: 6 }, (_, index) => {
     if (index < guesses.length) {
       return guesses[index]
@@ -18,6 +19,7 @@ export function GameGrid({ guesses, currentGuess, currentRow }: GameGridProps) {
   const getCellClass = (letter: string, position: number, rowIndex: number) => {
     const baseClass = "flex items-center justify-center font-wordle-bold text-2xl uppercase"
 
+    // For rows that haven't been guessed yet
     if (rowIndex >= guesses.length) {
       if (letter.trim()) {
         return `${baseClass} wordle-tile-filled`
@@ -26,10 +28,12 @@ export function GameGrid({ guesses, currentGuess, currentRow }: GameGridProps) {
       }
     }
 
-    // This would normally check against the target word
-    // For demo purposes, using simple logic
-    const targetWord = "REACT" // This should come from game logic
+    // Safety check for targetWord
+    if (!targetWord) {
+      return `${baseClass} wordle-tile-empty`
+    }
 
+    // For completed guesses, check against target word
     if (letter === targetWord[position]) {
       return `${baseClass} wordle-tile-correct`
     } else if (targetWord.includes(letter)) {
@@ -69,10 +73,10 @@ export function GameGrid({ guesses, currentGuess, currentRow }: GameGridProps) {
                 aria-label={
                   letter.trim()
                     ? `${colIndex + 1}${rowIndex === 0 ? "st" : rowIndex === 1 ? "nd" : rowIndex === 2 ? "rd" : "th"} letter, ${letter}, ${
-                        rowIndex < guesses.length
-                          ? letter === "REACT"[colIndex]
+                        rowIndex < guesses.length && targetWord // FIXED: Add safety check
+                          ? letter === targetWord[colIndex]
                             ? "correct"
-                            : "REACT".includes(letter)
+                            : targetWord.includes(letter)
                               ? "present in another position"
                               : "not in word"
                           : "empty"
@@ -80,11 +84,11 @@ export function GameGrid({ guesses, currentGuess, currentRow }: GameGridProps) {
                     : "empty"
                 }
                 data-state={
-                  rowIndex >= guesses.length
+                  rowIndex >= guesses.length || !targetWord // FIXED: Add safety check
                     ? "empty"
-                    : letter === "REACT"[colIndex]
+                    : letter === targetWord[colIndex]
                       ? "correct"
-                      : "REACT".includes(letter)
+                      : targetWord.includes(letter)
                         ? "present"
                         : "absent"
                 }
