@@ -1,8 +1,8 @@
 "use client"
 
-import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog" // ADDED DialogTitle
+import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
-import { X, Clock } from "lucide-react"
+import { Clock } from "lucide-react" // REMOVED X import since we're not using custom close button
 
 interface TimeStatsModalProps {
   open: boolean
@@ -39,24 +39,15 @@ export function TimeStatsModal({ open, onOpenChange, currentTime, timeStats }: T
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="wordle-bg wordle-text wordle-border max-w-md border-2">
-        {/* ADDED: DialogTitle for accessibility */}
+        {/* DialogTitle with Clock icon - no custom close button */}
         <DialogTitle className="text-2xl font-wordle-bold flex items-center gap-2">
           <Clock className="h-6 w-6" />
           Time Spent
         </DialogTitle>
         
         <div className="p-4">
-          <div className="flex justify-end items-center mb-6">
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => onOpenChange(false)}
-              className="wordle-text hover:bg-gray-800 p-1"
-            >
-              <X className="h-5 w-5" />
-            </Button>
-          </div>
-
+          {/* REMOVED: Custom close button section */}
+          
           <div className="space-y-6">
             {/* Current Session */}
             <div className="bg-gray-800 rounded-lg p-4">
