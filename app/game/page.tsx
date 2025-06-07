@@ -180,7 +180,7 @@ export default function GamePage() {
             </div>
           </div>
           <div className="text-xs text-gray-500 text-center">
-            <span className="font-wordle-normal">Version 10</span>
+            <span className="font-wordle-normal"></span>
             <span className="ml-2 sm:ml-4 text-green-400">
               Timer: {currentTime}s {isActive ? "🟢" : "🔴"}
             </span>

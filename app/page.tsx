@@ -145,8 +145,8 @@ export default function HomePage() {
         </div>
 
         <div style={{ color: "#9ca3af" }}>
-          <p style={{ fontWeight: 600, fontSize: "16px" }}>June 5, 2025</p>
-          <p style={{ fontSize: "12px", fontWeight: 500, marginTop: "16px" }}>Version 10</p>
+          <p style={{ fontWeight: 600, fontSize: "16px" }}></p>
+          <p style={{ fontSize: "12px", fontWeight: 500, marginTop: "16px" }}></p>
         </div>
       </div>
     </div>
