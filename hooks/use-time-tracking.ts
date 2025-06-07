@@ -2,181 +2,347 @@
 
 import { useState, useEffect, useCallback, useRef } from "react"
 
+interface TimeStats {
+  daily: number
+  weekly: number
+  monthly: number
+  total: number
+  currentSession: number
+}
+
+interface User {
+  id: string
+  email: string
+  name?: string
+}
+
 export function useTimeTracking() {
   const [currentTime, setCurrentTime] = useState(0)
-  const [timeStats, setTimeStats] = useState({ daily: 0, weekly: 0, monthly: 0 })
+  const [timeStats, setTimeStats] = useState<TimeStats>({
+    daily: 0,
+    weekly: 0,
+    monthly: 0,
+    total: 0,
+    currentSession: 0
+  })
+  const [isActive, setIsActive] = useState(false)
+  const [user, setUser] = useState<User | null>(null)
+
   const intervalRef = useRef<NodeJS.Timeout | null>(null)
   const startTimeRef = useRef<number | null>(null)
-  const isActiveRef = useRef(false)
 
-  // Load existing time data
-  const loadTimeData = useCallback(() => {
+  // SIMPLE: Get current user identifier
+  const getUserId = useCallback(() => {
     try {
-      const timeDataString = localStorage.getItem("wordle-time-tracking")
-      if (timeDataString) {
-        const timeData = JSON.parse(timeDataString)
-        const today = new Date().toDateString()
-        const weekStart = getWeekStart(new Date())
-        const monthKey = `${new Date().getFullYear()}-${new Date().getMonth()}`
-
-        setTimeStats({
-          daily: Math.floor((timeData.daily?.[today] || 0) / 1000),
-          weekly: Math.floor((timeData.weekly?.[weekStart] || 0) / 1000),
-          monthly: Math.floor((timeData.monthly?.[monthKey] || 0) / 1000),
-        })
+      // Check localStorage values
+      const userData = localStorage.getItem('user')
+      const guestMode = localStorage.getItem('guestMode')
+      
+      console.log('🔍 Checking user state:')
+      console.log('  - userData:', userData)
+      console.log('  - guestMode:', guestMode)
+      
+      // If explicitly in guest mode, return guest
+      if (guestMode === 'true') {
+        console.log('  → Guest mode detected')
+        return 'guest_mode'
       }
+      
+      // If we have user data and NOT in guest mode, return authenticated user
+      if (userData && guestMode !== 'true') {
+        const parsed = JSON.parse(userData)
+        const userId = `auth_${parsed.email}`
+        console.log('  → Authenticated user:', userId)
+        return userId
+      }
+      
+      console.log('  → No user detected')
+      return null
     } catch (error) {
-      console.error("Error loading time data:", error)
+      console.error('Error getting user ID:', error)
+      return null
     }
   }, [])
 
-  // Start time tracking session
-  const startSession = useCallback(() => {
-    console.log("Starting time tracking session...")
-
-    // Clear any existing interval
-    if (intervalRef.current) {
-      clearInterval(intervalRef.current)
+  // SIMPLE: Get user object
+  const getUser = useCallback(() => {
+    try {
+      const guestMode = localStorage.getItem('guestMode')
+      
+      // Check guest mode first
+      if (guestMode === 'true') {
+        return {
+          id: 'guest_mode',
+          email: 'guest@wordle.com',
+          name: 'Guest User'
+        }
+      }
+      
+      // Then check for authenticated user
+      const userData = localStorage.getItem('user')
+      if (userData) {
+        const parsed = JSON.parse(userData)
+        return {
+          id: `auth_${parsed.email}`,
+          email: parsed.email,
+          name: parsed.name || parsed.user_metadata?.full_name
+        }
+      }
+      
+      return null
+    } catch (error) {
+      console.error('Error getting user:', error)
+      return null
     }
+  }, [])
 
-    // Set start time and mark as active
-    startTimeRef.current = Date.now()
-    isActiveRef.current = true
-    setCurrentTime(0)
+  // SIMPLE: Get storage key for user
+  const getStorageKey = useCallback((userId: string) => {
+    return `wordle_${userId}`
+  }, [])
 
-    // Load existing time data
-    loadTimeData()
+  // SIMPLE: Get today's date
+  const getToday = useCallback(() => {
+    return new Date().toISOString().split('T')[0]
+  }, [])
 
-    // Start the timer interval
-    intervalRef.current = setInterval(() => {
-      if (!startTimeRef.current || !isActiveRef.current) return
-
-      const elapsed = Math.floor((Date.now() - startTimeRef.current) / 1000)
-      setCurrentTime(elapsed)
-
-      console.log(`Timer update: ${elapsed}s`)
-
-      // Update time stats with current session included
-      try {
-        const timeDataString = localStorage.getItem("wordle-time-tracking")
-        const timeData = timeDataString ? JSON.parse(timeDataString) : {}
-
-        const today = new Date().toDateString()
-        const weekStart = getWeekStart(new Date())
-        const monthKey = `${new Date().getFullYear()}-${new Date().getMonth()}`
-
+  // SIMPLE: Load user's time data
+  const loadTimeData = useCallback((userId: string) => {
+    try {
+      const key = getStorageKey(userId)
+      const data = localStorage.getItem(key)
+      
+      if (data) {
+        const parsed = JSON.parse(data)
+        const today = getToday()
+        
         setTimeStats({
-          daily: Math.floor((timeData.daily?.[today] || 0) / 1000) + elapsed,
-          weekly: Math.floor((timeData.weekly?.[weekStart] || 0) / 1000) + elapsed,
-          monthly: Math.floor((timeData.monthly?.[monthKey] || 0) / 1000) + elapsed,
+          daily: Math.floor((parsed.daily || 0) / 1000),
+          weekly: Math.floor((parsed.weekly || 0) / 1000),
+          monthly: Math.floor((parsed.monthly || 0) / 1000),
+          total: Math.floor((parsed.total || 0) / 1000),
+          currentSession: 0
         })
-      } catch (error) {
-        console.error("Error updating time stats:", error)
+        
+        console.log(`📊 Loaded data for ${userId}:`, {
+          daily: Math.floor((parsed.daily || 0) / 1000),
+          weekly: Math.floor((parsed.weekly || 0) / 1000),
+          monthly: Math.floor((parsed.monthly || 0) / 1000),
+          total: Math.floor((parsed.total || 0) / 1000)
+        })
+      } else {
+        // No data - start fresh
+        setTimeStats({
+          daily: 0,
+          weekly: 0,
+          monthly: 0,
+          total: 0,
+          currentSession: 0
+        })
+        console.log(`🆕 Fresh start for ${userId}`)
+      }
+    } catch (error) {
+      console.error('Error loading time data:', error)
+      setTimeStats({
+        daily: 0,
+        weekly: 0,
+        monthly: 0,
+        total: 0,
+        currentSession: 0
+      })
+    }
+  }, [getStorageKey, getToday])
+
+  // SIMPLE: Save session for user
+  const saveSession = useCallback((userId: string, duration: number) => {
+    if (duration < 1000) return
+    
+    try {
+      const key = getStorageKey(userId)
+      const existing = localStorage.getItem(key)
+      const data = existing ? JSON.parse(existing) : {}
+      
+      // Add session duration to all time periods
+      data.daily = (data.daily || 0) + duration
+      data.weekly = (data.weekly || 0) + duration
+      data.monthly = (data.monthly || 0) + duration
+      data.total = (data.total || 0) + duration
+      
+      localStorage.setItem(key, JSON.stringify(data))
+      
+      // Update display immediately
+      setTimeStats({
+        daily: Math.floor(data.daily / 1000),
+        weekly: Math.floor(data.weekly / 1000),
+        monthly: Math.floor(data.monthly / 1000),
+        total: Math.floor(data.total / 1000),
+        currentSession: 0
+      })
+      
+      console.log(`💾 Saved ${Math.floor(duration / 1000)}s for ${userId}`)
+    } catch (error) {
+      console.error('Error saving session:', error)
+    }
+  }, [getStorageKey])
+
+  // SIMPLE: Start timer
+  const startTimer = useCallback(() => {
+    if (isActive || !user) return
+    
+    console.log(`▶️ Starting timer for ${user.id}`)
+    setIsActive(true)
+    setCurrentTime(0)
+    startTimeRef.current = Date.now()
+    
+    intervalRef.current = setInterval(() => {
+      if (startTimeRef.current) {
+        const elapsed = Math.floor((Date.now() - startTimeRef.current) / 1000)
+        setCurrentTime(elapsed)
       }
     }, 1000)
+  }, [isActive, user])
 
-    console.log("Time tracking started successfully")
-  }, [loadTimeData])
-
-  // End session and save data
-  const endSession = useCallback(() => {
-    console.log("Ending time tracking session...")
-
-    if (!startTimeRef.current || !isActiveRef.current) {
-      console.log("No active session to end")
-      return
-    }
-
-    const endTime = Date.now()
-    const sessionDuration = endTime - startTimeRef.current
-
-    try {
-      // Get existing time data
-      const timeDataString = localStorage.getItem("wordle-time-tracking")
-      const timeData = timeDataString ? JSON.parse(timeDataString) : {}
-
-      // Update time periods
-      const today = new Date().toDateString()
-      timeData.daily = timeData.daily || {}
-      timeData.daily[today] = (timeData.daily[today] || 0) + sessionDuration
-
-      const weekStart = getWeekStart(new Date())
-      timeData.weekly = timeData.weekly || {}
-      timeData.weekly[weekStart] = (timeData.weekly[weekStart] || 0) + sessionDuration
-
-      const monthKey = `${new Date().getFullYear()}-${new Date().getMonth()}`
-      timeData.monthly = timeData.monthly || {}
-      timeData.monthly[monthKey] = (timeData.monthly[monthKey] || 0) + sessionDuration
-
-      // Save updated data
-      localStorage.setItem("wordle-time-tracking", JSON.stringify(timeData))
-      console.log(`Session saved. Duration: ${Math.floor(sessionDuration / 1000)}s`)
-    } catch (error) {
-      console.error("Error saving time tracking data:", error)
-    }
-
-    // Clear interval and reset
+  // SIMPLE: Stop timer
+  const stopTimer = useCallback(() => {
+    if (!isActive || !startTimeRef.current || !user) return
+    
+    console.log(`⏹️ Stopping timer for ${user.id}`)
+    setIsActive(false)
+    
     if (intervalRef.current) {
       clearInterval(intervalRef.current)
       intervalRef.current = null
     }
-
+    
+    const duration = Date.now() - startTimeRef.current
     startTimeRef.current = null
-    isActiveRef.current = false
     setCurrentTime(0)
-  }, [])
-
-  // Initialize on mount
-  useEffect(() => {
-    loadTimeData()
-    startSession()
-
-    // Cleanup on unmount
-    return () => {
-      endSession()
+    
+    if (duration >= 1000) {
+      saveSession(user.id, duration)
     }
-  }, []) // Empty dependency array to run only once
+  }, [isActive, user, saveSession])
 
-  // Handle page visibility changes
+  // SIMPLE: Initialize immediately
   useEffect(() => {
-    const handleVisibilityChange = () => {
-      if (document.hidden) {
-        console.log("Page hidden - pausing timer")
-        isActiveRef.current = false
-      } else {
-        console.log("Page visible - resuming timer")
-        isActiveRef.current = true
-        if (!startTimeRef.current) {
-          startSession()
+    const currentUser = getUser()
+    console.log('👤 User:', currentUser)
+    
+    setUser(currentUser)
+    
+    if (currentUser) {
+      loadTimeData(currentUser.id)
+      // Start timer immediately
+      setTimeout(() => {
+        setIsActive(true)
+        setCurrentTime(0)
+        startTimeRef.current = Date.now()
+        
+        intervalRef.current = setInterval(() => {
+          if (startTimeRef.current) {
+            const elapsed = Math.floor((Date.now() - startTimeRef.current) / 1000)
+            setCurrentTime(elapsed)
+          }
+        }, 1000)
+      }, 100)
+    }
+  }, []) // Only run once
+
+  // SIMPLE: Watch for user changes by checking localStorage directly
+  useEffect(() => {
+    const checkUserChange = () => {
+      const currentUserId = getUserId()
+      const stateUserId = user?.id || null
+      
+      if (currentUserId !== stateUserId) {
+        console.log(`🔄 User changed: ${stateUserId} → ${currentUserId}`)
+        
+        // Save current session
+        if (isActive && startTimeRef.current && user) {
+          const duration = Date.now() - startTimeRef.current
+          if (duration >= 1000) {
+            saveSession(user.id, duration)
+          }
+        }
+        
+        // Stop timer
+        if (intervalRef.current) {
+          clearInterval(intervalRef.current)
+          intervalRef.current = null
+        }
+        setIsActive(false)
+        setCurrentTime(0)
+        startTimeRef.current = null
+        
+        // Switch to new user
+        const newUser = getUser()
+        setUser(newUser)
+        
+        if (newUser) {
+          loadTimeData(newUser.id)
+          // Start timer for new user
+          setTimeout(() => {
+            setIsActive(true)
+            setCurrentTime(0)
+            startTimeRef.current = Date.now()
+            
+            intervalRef.current = setInterval(() => {
+              if (startTimeRef.current) {
+                const elapsed = Math.floor((Date.now() - startTimeRef.current) / 1000)
+                setCurrentTime(elapsed)
+              }
+            }, 1000)
+          }, 100)
         }
       }
     }
+    
+    // Check every 2 seconds
+    const interval = setInterval(checkUserChange, 2000)
+    
+    return () => clearInterval(interval)
+  }, [user, isActive, getUserId, getUser, loadTimeData, saveSession])
 
+  // SIMPLE: Handle page visibility
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (document.hidden) {
+        stopTimer()
+      } else if (user) {
+        startTimer()
+      }
+    }
+    
     const handleBeforeUnload = () => {
-      endSession()
+      stopTimer()
     }
-
-    document.addEventListener("visibilitychange", handleVisibilityChange)
-    window.addEventListener("beforeunload", handleBeforeUnload)
-
+    
+    document.addEventListener('visibilitychange', handleVisibilityChange)
+    window.addEventListener('beforeunload', handleBeforeUnload)
+    
     return () => {
-      document.removeEventListener("visibilitychange", handleVisibilityChange)
-      window.removeEventListener("beforeunload", handleBeforeUnload)
+      document.removeEventListener('visibilitychange', handleVisibilityChange)
+      window.removeEventListener('beforeunload', handleBeforeUnload)
     }
-  }, [startSession, endSession])
+  }, [user, startTimer, stopTimer])
+
+  // SIMPLE: Cleanup
+  useEffect(() => {
+    return () => {
+      if (intervalRef.current) {
+        clearInterval(intervalRef.current)
+      }
+    }
+  }, [])
 
   return {
-    startSession,
-    endSession,
     currentTime,
-    timeStats,
-    isActive: isActiveRef.current,
+    timeStats: {
+      ...timeStats,
+      currentSession: currentTime
+    },
+    isActive,
+    user,
+    connectionStatus: 'offline' as const
   }
-}
-
-function getWeekStart(date: Date): string {
-  const d = new Date(date)
-  const day = d.getDay()
-  const diff = d.getDate() - day
-  return new Date(d.setDate(diff)).toDateString()
 }

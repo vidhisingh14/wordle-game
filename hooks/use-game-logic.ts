@@ -1,177 +1,266 @@
 "use client"
 
-import { useState, useCallback } from "react"
+import { useState, useCallback, useEffect } from "react"
 
-type GameStatus = "playing" | "won" | "lost"
+type GameStatus = "playing" | "won" | "lost" | "loading"
 type KeyStatus = "correct" | "present" | "absent" | "unused"
 
 export function useGameLogic() {
-  // Word list for random selection
-  const WORD_LIST = [
-    "REACT", "ADAPT", "CEASE", "LIGHT", "WORLD", "HOUSE", "PLANT", "MUSIC",
-  "ABOUT", "AFTER", "AGAIN", "AMONG", "ALONG", "AWARE", "BADGE", "BEACH",
-  "BREAD", "BREAK", "BRIEF", "BRING", "BROAD", "BUILD", "CATCH", "CHAIR",
-  "CHART", "CHEAP", "CHECK", "CHILD", "CHINA", "CLAIM", "CLASS", "CLEAN",
-  "CLEAR", "CLIMB", "CLOSE", "COACH", "COAST", "COUNT", "COVER", "CROWD",
-  "DANCE", "DOING", "DREAM", "DRESS", "DRINK", "DRIVE", "EARLY", "EARTH",
-  "EMPTY", "ENEMY", "ENJOY", "ENTER", "ENTRY", "EQUAL", "ERROR", "EVENT",
-  "EVERY", "EXACT", "EXIST", "EXTRA", "FAITH", "FALSE", "FAULT", "FIELD",
-  "FIGHT", "FINAL", "FIRST", "FLASH", "FLOOR", "FOCUS", "FORCE", "FORTH",
-  "FRAME", "FRESH", "FRONT", "FRUIT", "FUNNY", "GLASS", "GRACE", "GRAND",
-  "GRANT", "GRASS", "GREAT", "GREEN", "GROSS", "GROUP", "GUARD", "GUEST",
-  "GUIDE", "HAPPY", "HEART", "HEAVY", "HORSE", "HOTEL", "HUMAN", "IDEAL",
-  "IMAGE", "INNER", "INPUT", "ISSUE", "JUDGE", "KNIFE", "LARGE", "LASER",
-  "LATER", "LAUGH", "LAYER", "LEARN", "LEAST", "LEAVE", "LEGAL", "LEVEL",
-  "LOCAL", "LOOSE", "LOWER", "LUCKY", "LUNCH", "MAGIC", "MAJOR", "MAKER",
-  "MARCH", "MATCH", "MAYBE", "MAYOR", "MEANT", "MEDIA", "METAL", "MIGHT",
-  "MINOR", "MINUS", "MIXED", "MODEL", "MONEY", "MONTH", "MORAL", "MOTOR",
-  "MOUNT", "MOUSE", "MOUTH", "MOVED", "MOVIE", "NEEDS", "NEVER", "NOISE",
-  "NORTH", "NOTED", "NOVEL", "NURSE", "OCCUR", "OCEAN", "OFFER", "OFTEN",
-  "ORDER", "OTHER", "OUGHT", "OWNED", "OWNER", "PAINT", "PANEL", "PAPER",
-  "PARTY", "PEACE", "PHASE", "PHONE", "PHOTO", "PIECE", "PILOT", "PITCH",
-  "PLACE", "PLAIN", "PLANE", "POINT", "POUND", "POWER", "PRESS", "PRICE",
-  "PRIDE", "PRIME", "PRINT", "PRIOR", "PRIZE", "PROOF", "PROUD", "PROVE",
-  "QUEEN", "QUICK", "QUIET", "QUITE", "RADIO", "RAISE", "RANGE", "RAPID",
-  "RATIO", "REACH", "READY", "REFER", "RIGHT", "RIVER", "ROUGH", "ROUND",
-  "ROUTE", "ROYAL", "RURAL", "SCALE", "SCENE", "SCOPE", "SCORE", "SENSE",
-  "SERVE", "SEVEN", "SHALL", "SHAPE", "SHARE", "SHARP", "SHEET", "SHELF",
-  "SHELL", "SHIFT", "SHINE", "SHIRT", "SHOCK", "SHOOT", "SHORT", "SHOWN",
-  "SIGHT", "SINCE", "SIXTH", "SIXTY", "SIZED", "SKILL", "SLEEP", "SLIDE",
-  "SMALL", "SMART", "SMILE", "SMOKE", "SNAKE", "SNOW", "SOLID", "SOLVE",
-  "SORRY", "SOUND", "SOUTH", "SPACE", "SPARE", "SPEAK", "SPEED", "SPEND",
-  "SPENT", "SPLIT", "SPOKE", "SPORT", "STAFF", "STAGE", "STAKE", "STAND",
-  "START", "STATE", "STEAM", "STEEL", "STICK", "STILL", "STOCK", "STONE",
-  "STOOD", "STORE", "STORM", "STORY", "STRIP", "STUCK", "STUDY", "STUFF",
-  "STYLE", "SUGAR", "SUITE", "SUPER", "SWEET", "TABLE", "TAKEN", "TASTE",
-  "TAXES", "TEACH", "TERMS", "THANK", "THEFT", "THEIR", "THEME", "THERE",
-  "THESE", "THICK", "THING", "THINK", "THIRD", "THOSE", "THREE", "THREW",
-  "THROW", "THUMB", "TIGHT", "TIMER", "TIRED", "TITLE", "TODAY", "TOPIC",
-  "TOTAL", "TOUCH", "TOUGH", "TOWER", "TRACK", "TRADE", "TRAIN", "TREAT",
-  "TREND", "TRIAL", "TRIBE", "TRICK", "TRIED", "TRIES", "TRUCK", "TRULY",
-  "TRUNK", "TRUST", "TRUTH", "TWICE", "UNCLE", "UNDER", "UNDUE", "UNION",
-  "UNITY", "UNTIL", "UPPER", "UPSET", "URBAN", "USAGE", "USUAL", "VALUE",
-  "VIDEO", "VIRUS", "VISIT", "VITAL", "VOICE", "WASTE", "WATCH", "WATER",
-  "WEIGH", "WEIRD", "WHEEL", "WHERE", "WHICH", "WHILE", "WHITE", "WHOLE",
-  "WHOSE", "WIDOW", "WIDTH", "WOMAN", "WOMEN", "WORLD", "WORRY", "WORSE",
-  "WORST", "WORTH", "WOULD", "WRITE", "WRONG", "WROTE", "YOUNG", "YOUTH", 
-  "YATCH", "ABOVE", "ABUSE", "ACTOR", "ACUTE", "ADMIT", "ADOPT", "ADULT", "AGENT",
-  "AGREE", "AHEAD", "ALARM", "ALBUM", "ALERT", "ALIEN", "ALIGN", "ALIKE",
-  "ALIVE", "ALLOW", "ALONE", "ALTER", "AMBER", "AMEND", "ANGEL", "ANGER",
-  "ANGLE", "ANGRY", "APART", "APPLE", "APPLY", "ARENA", "ARGUE", "ARISE",
-  "ARMED", "ARMOR", "ARRAY", "ARROW", "ASIDE", "ASSET", "ATLAS", "AVOID",
-  "AWAKE", "AWARD", "AWFUL", "BASIC", "BATCH", "BEARD", "BEAST", "BEGIN",
-  "BEING", "BELLY", "BELOW", "BENCH", "BIKES", "BILLS", "BIRTH", "BLACK",
-  "BLADE", "BLAME", "BLANK", "BLAST", "BLAZE", "BLEED", "BLEND", "BLESS",
-  "BLIND", "BLOCK", "BLOOD", "BLOOM", "BLOWN", "BOARD", "BOAST", "BOATS",
-  "BONUS", "BOOST", "BOOTH", "BOUND", "BOXES", "BRAIN", "BRAND", "BRASS",
-  "BRAVE", "BREED", "BROWN", "BRUSH", "BURST", "BUYER", "CABLE", "CACHE",
-  "CANDY", "CANOE", "CARDS", "CARRY", "CARVE", "CAUSE", "CHAIN", "CHALK",
-  "CHAMP", "CHAOS", "CHARM", "CHASE", "CHEAT", "CHESS", "CHEST", "CHIEF",
-  "CHORD", "CHOSE", "CHUNK", "CLASH", "CLICK", "CLIFF", "CLOCK", "CLOTH",
-  "CLOUD", "CLOWN", "CLUBS", "CODES", "COINS", "COLOR", "COMET", "CORAL",
-  "COSTA", "COURT", "CRACK", "CRAFT", "CRANE", "CRASH", "CRAZY", "CREAM",
-  "CRIME", "CROPS", "CROSS", "CRUDE", "CRUSH", "CURVE", "CYCLE", "DAILY",
-  "DATED", "DEALS", "DEATH", "DEBUT", "DELAY", "DELTA", "DENSE", "DEPTH",
-  "DERBY", "DESKS", "DEVIL", "DIARY", "DICED", "DIGIT", "DIRTY", "DISCO",
-  "DITCH", "DIVER", "DIZZY", "DOORS", "DOUBT", "DOZEN", "DRAFT", "DRAKE",
-  "DRAMA", "DRANK", "DRAWN", "DRIED", "DRIFT", "DRILL", "DRONE", "DROVE",
-  "DRUMS", "DRUNK", "DUCKS", "DUMMY", "DUMPS", "DUSTY", "DUTCH", "DWARF",
-  "DYING", "EAGER", "EAGLE", "EASEL", "EATEN", "EBONY", "EDGES", "EIGHT",
-  "ELBOW", "ELECT", "ELITE", "ENDED", "ESSAY", "ETHER", "ETHIC", "FACED",
-  "FACTS", "FADED", "FAILS", "FAIRY", "FANCY", "FARMS", "FATAL", "FAVOR",
-  "FEARS", "FEAST", "FEEDS", "FEELS", "FENCE", "FERRY", "FETCH", "FEVER",
-  "FIBER", "FIFTY", "FILMS", "FINDS", "FINER", "FIRED", "FIRMS", "FIXED",
-  "FLAGS", "FLAME", "FLASK", "FLEET", "FLESH", "FLIES", "FLINT", "FLOAT",
-  "FLOCK", "FLOOD", "FLOUR", "FLOWS", "FLUID", "FLUTE", "FOCAL", "FOLKS",
-  "FONTS", "FOODS", "FORGE", "FORMS", "FORTY", "FORUM", "FOUND", "FRAUD",
-  "FRIED", "FROST", "FULLY", "FUNDS", "GAINS", "GAMES", "GATES", "GAZER",
-  "GEARS", "GENES", "GHOST", "GIANT", "GIFTS", "GIRLS", "GIVEN", "GIVES",
-  "GLADE", "GLOBE", "GLORY", "GLOVE", "GOALS", "GOATS", "GOING", "GOODS",
-  "GRADE", "GRAIN", "GRAPH", "GRAVE", "GREED", "GREET", "GRIEF", "GRILL",
-  "GRIND", "GRIPS", "GROVE", "GROWN", "GUESS", "GUILD", "GUILT", "GULLS",
-  "HABIT", "HALLS", "HANDS", "HANDY", "HARSH", "HASTE", "HASTY", "HATCH",
-  "HAVEN", "HAWKS", "HEADS", "HEARD", "HEATH", "HEDGE", "HEELS", "HELLO",
-  "HELPS", "HERBS", "HIDES", "HILLS", "HINTS", "HIRED", "HOBBY", "HOLDS",
-  "HOLES", "HOLLY", "HOMES", "HONEY", "HONOR", "HOOKS", "HOPED", "HOPES",
-  "HORNS", "HOSTS", "HOURS", "HOVER", "HUMID", "HUMOR", "HURRY", "HUSKY",
-  "HYENA", "ICONS", "IDEAS", "IDIOM", "IDOLS", "IGLOO", "IMPLY", "INBOX",
-  "INDEX", "IRONY", "ITEMS", "IVORY", "JADED", "JAILS", "JEANS", "JEWEL",
-  "JOINS", "JOKES", "JOLLY", "JUICE", "JUMBO", "JUMPS", "JUNKY", "KEEPS",
-  "KICKS", "KILLS", "KINDS", "KINGS", "KITES", "KNEES", "KNOCK", "KNOTS",
-  "KNOWN", "KNOWS", "LABEL", "LABOR", "LACKS", "LAKES", "LAMPS", "LANCE",
-  "LANDS", "LANES", "LEADS", "LEASE", "LEDGE", "LEMON", "LEVER", "LIKES",
-  "LIMIT", "LINED", "LINES", "LINKS", "LIONS", "LISTS", "LIVED", "LIVER",
-  "LIVES", "LOADS", "LOANS", "LOBBY", "LOCKS", "LODGE", "LOGIC", "LOOKS",
-  "LOOPS", "LORDS", "LOSES", "LOVED", "LOVER", "LOVES", "LUNGS", "LYING",
-  "MALES", "MANGO", "MANOR", "MAPLE", "MARKS", "MARRY", "MARSH", "MASKS",
-  "MATES", "MATHS", "MEALS", "MEANS", "MEATS", "MEDAL", "MEETS", "MELON",
-  "MELTS", "MEMOS", "MENUS", "MERCY", "MERGE", "MERIT", "MERRY", "METER",
-  "METRO", "MICRO", "MILES", "MINDS", "MINES", "MIXER", "MIXES", "MODES",
-  "MONKS", "MOODS", "MOULD", "MOUND", "MOVER", "MOVES", "MOWED", "MYTHS",
-  "NAILS", "NAKED", "NAMED", "NAMES", "NASTY", "NAVAL", "NEWLY", "NICER",
-  "NIGHT", "NOBLE", "NODES", "OATHS", "OBEYS", "OLIVE", "OPENS", "OPERA",
-  "ORGAN", "OUTER", "OUNCE", "OXIDE", "PACED", "PACKS", "PAGES", "PAINS",
-  "PAIRS", "PANIC", "PARKS", "PARTS", "PASTA", "PASTE", "PATCH", "PATHS",
-  "PAUSE", "PEACH", "PEAKS", "PEARL", "PEDAL", "PENNY", "PIXEL", "PIZZA",
-  "PLANS", "PLATE", "PLAYS", "PLAZA", "PLOTS", "PLUMB", "POEMS", "POLES",
-  "POLLS", "POOLS", "PORCH", "POSED", "POSTS", "PROPS", "PSALM", "PULLS",
-  "PULSE", "PUMPS", "PUNCH", "PUPIL", "PURSE", "PUSHY", "QUACK", "QUAKE",
-  "QUART", "QUERY", "QUEST", "QUEUE", "QUOTA", "QUOTE", "RACES", "RADAR",
-  "RALLY", "RANKS", "RATES", "REALM", "REBEL", "REIGN", "RELAX", "RELAY",
-  "REMIX", "REPLY", "RESET", "RINGS", "RINSE", "RISES", "RISKS", "RIVAL",
-  "ROADS", "ROAST", "ROBES", "ROBOT", "ROCKS", "ROLES", "ROLLS", "ROMAN",
-  "ROOMS", "ROOTS", "ROPES", "ROSES", "RUINS", "RULES", "RUSTY", "SADLY",
-  "SAFER", "SAINT", "SALAD", "SALES", "SALON", "SALTY", "SANDY", "SAUCE",
-  "SAVED", "SAVER", "SAVES", "SCARE", "SCENT", "SCOUT", "SCRAP", "SEALS",
-  "SEATS", "SEEDS", "SEEKS", "SEEMS", "SELLS", "SENDS", "SHADE", "SHAFT",
-  "SHAKE", "SHAME", "SHARK", "SHEEP", "SHIPS", "SHOES", "SHOPS", "SHORE",
-  "SHOWS", "SHRUG", "SIDES", "SIGNS", "SILLY", "SINKS", "SITES", "SIZES",
-  "SKINS", "SKULL", "SLACK", "SLAMS", "SLATE", "SLAVE", "SLEPT", "SLIME",
-  "SLOPE", "SLOTS", "SOBER", "SOCKS", "SOFAS", "SOLAR", "SONGS", "SORTS",
-  "SOULS", "SPINE", "SPOTS", "SPRAY", "SQUAD", "STAIN", "STALE", "STAMP",
-  "STARE", "STAYS", "STEAL", "STEEP", "STEPS", "STERN", "STING", "STINK",
-  "STOIC", "SUITS", "SUNNY", "SWEEP", "SWEPT", "SWIFT", "SWING", "SWIPE",
-  "SWISS", "TALES", "TALKS", "TANKS", "TAPES", "TASKS", "TEAMS", "TEARS",
-  "TEENS", "TEETH", "TELLS", "TENTS", "TESTS", "TEXTS", "TIGER", "TILES",
-  "TIMES", "TOKEN", "TOOLS", "TOOTH", "TOURS", "TOWEL", "TOWNS", "TRAIL",
-  "TREES", "TRIBE", "TRIPS", "TRUNK", "TUBES", "TUMOR", "TURNS", "TWIST",
-  "TYPED", "TYPES", "ULTRA", "UNFED", "UNITS", "VAPOR", "VAULT", "VEGAN",
-  "VENUE", "VERBS", "VIEWS", "VINYL", "VIRAL", "VITAL", "VOCAL", "VOIDS",
-  "VOTES", "WAGES", "WAIST", "WAITS", "WAKES", "WALKS", "WALLS", "WANTS",
-  "WARDS", "WARMS", "WARNS", "WAVES", "WAXED", "WEARY", "WEEKS", "WELLS",
-  "WHALE", "WHEAT", "WIDER", "WINDS", "WINES", "WINGS", "WINKS", "WIPED",
-  "WIPES", "WIRED", "WIRES", "WITCH", "WIVES", "WOODS", "WORDS", "WORKS",
-  "YARDS", "YEARS", "YEAST", "YIELD", "YOURS", "ZEBRA", "ZEROS", "ZONES"
+  // 50 high-quality fallback words for production
+  const FALLBACK_WORDS = [
+    "REACT", "LIGHT", "WORLD", "HOUSE", "MUSIC", "ADAPT", "CEASE", "PLANT",
+    "ABOUT", "AFTER", "AGAIN", "AMONG", "ALONG", "AWARE", "BADGE", "BEACH",
+    "BREAD", "BREAK", "BRIEF", "BRING", "BROAD", "BUILD", "CATCH", "CHAIR",
+    "CHART", "CHEAP", "CHECK", "CHILD", "CHINA", "CLAIM", "CLASS", "CLEAN",
+    "CLEAR", "CLIMB", "CLOSE", "COACH", "COAST", "COUNT", "COVER", "CROWD",
+    "DANCE", "DOING", "DREAM", "DRESS", "DRINK", "DRIVE", "EARLY", "EARTH",
+    "EMPTY", "ENEMY", "ENJOY", "ENTER"
   ]
-
-  // Function to get random word
-  const getRandomWord = () => {
-    const randomIndex = Math.floor(Math.random() * WORD_LIST.length)
-    return WORD_LIST[randomIndex]
-  }
 
   const [currentGuess, setCurrentGuess] = useState("")
   const [guesses, setGuesses] = useState<string[]>([])
   const [currentRow, setCurrentRow] = useState(0)
   const [gameStatus, setGameStatus] = useState<GameStatus>("playing")
   const [keyboardStatus, setKeyboardStatus] = useState<Record<string, KeyStatus>>({})
-  
-  // Initialize with random word - using regular state so it can be updated
-  const [targetWord, setTargetWord] = useState(() => getRandomWord())
+  const [targetWord, setTargetWord] = useState<string>("")
+  const [wordSource, setWordSource] = useState<"api" | "fallback">("fallback")
 
+  // Simple fallback word picker
+  const getFallbackWord = (): string => {
+    const randomIndex = Math.floor(Math.random() * FALLBACK_WORDS.length)
+    return FALLBACK_WORDS[randomIndex]
+  }
+
+  // Get API key safely in browser environment (production ready)
+  const getApiKey = (): string | null => {
+    if (typeof window === 'undefined') return null
+    
+    try {
+      const apiKey = process.env.NEXT_PUBLIC_API_NINJAS_KEY
+      if (apiKey) {
+        // Only log in development
+        if (process.env.NODE_ENV === 'development') {
+          console.log('✅ API key found from environment')
+        }
+        return apiKey
+      }
+    } catch (error) {
+      // Silent in production, log only in development
+      if (process.env.NODE_ENV === 'development') {
+        console.warn('❌ Environment variable not accessible:', error)
+      }
+    }
+    
+    // Remove hardcoded key section for production
+    if (process.env.NODE_ENV === 'development') {
+      console.warn('❌ No API key found')
+    }
+    return null
+  }
+
+  // Fetch word from API Ninjas with timeout (your exact working logic)
+  const fetchWordFromAPI = async (): Promise<string | null> => {
+    const apiKey = getApiKey()
+    if (!apiKey) {
+      return null
+    }
+
+    try {
+      if (process.env.NODE_ENV === 'development') {
+        console.log('🔍 Fetching word from API Ninjas...')
+      }
+      
+      const controller = new AbortController()
+      const timeoutId = setTimeout(() => controller.abort(), 5000)
+      
+      const response = await fetch('https://api.api-ninjas.com/v1/randomword', {
+        method: 'GET',
+        headers: {
+          'X-Api-Key': apiKey,
+          'Content-Type': 'application/json'
+        },
+        signal: controller.signal
+      })
+      
+      clearTimeout(timeoutId)
+      
+      if (response.ok) {
+        const data = await response.json()
+        
+        if (process.env.NODE_ENV === 'development') {
+          console.log('🔍 Raw API response:', data)
+        }
+        
+        let word = null
+        
+        if (data.word && Array.isArray(data.word) && data.word.length > 0) {
+          word = String(data.word[0]).toUpperCase()
+          if (process.env.NODE_ENV === 'development') {
+            console.log('📝 Extracted word from array:', word)
+          }
+        } else if (data.word && typeof data.word === 'string') {
+          word = data.word.toUpperCase()
+          if (process.env.NODE_ENV === 'development') {
+            console.log('📝 Extracted word from string:', word)
+          }
+        } else if (typeof data === 'string') {
+          word = data.toUpperCase()
+        } else {
+          if (process.env.NODE_ENV === 'development') {
+            console.warn('⚠️ Unexpected API response format:', data)
+          }
+          return null
+        }
+        
+        if (word && word.length === 5 && /^[A-Z]+$/.test(word)) {
+          if (process.env.NODE_ENV === 'development') {
+            console.log('✅ Got 5-letter word from API:', word)
+          }
+          return word
+        } else {
+          if (process.env.NODE_ENV === 'development') {
+            console.log(`⚠️ API returned ${word?.length || 0}-letter word: ${word}, trying again...`)
+          }
+          // If not 5 letters, try again (your original infinite retry logic)
+          return await fetchWordFromAPI()
+        }
+      } else {
+        if (process.env.NODE_ENV === 'development') {
+          console.warn('❌ API response not ok:', response.status)
+        }
+        return null
+      }
+    } catch (error) {
+      if (process.env.NODE_ENV === 'development') {
+        if (error.name === 'AbortError') {
+          console.warn('❌ API request timed out')
+        } else {
+          console.warn('❌ API request failed:', error)
+        }
+      }
+      return null
+    }
+  }
+
+  // Get random word (try API, fallback to local)
+  const getRandomWord = async (): Promise<string> => {
+    if (process.env.NODE_ENV === 'development') {
+      console.log('🎯 Getting random word...')
+    }
+    
+    try {
+      const apiWord = await fetchWordFromAPI()
+      if (apiWord) {
+        setWordSource("api")
+        return apiWord
+      }
+    } catch (error) {
+      // Silent fallback in production
+      if (process.env.NODE_ENV === 'development') {
+        console.warn('API failed, using fallback:', error)
+      }
+    }
+    
+    if (process.env.NODE_ENV === 'development') {
+      console.log('📝 Using fallback word')
+    }
+    setWordSource("fallback")
+    return getFallbackWord()
+  }
+
+  // Initialize with immediate fallback word, then try to get API word
+  useEffect(() => {
+    const initializeGame = async () => {
+      if (process.env.NODE_ENV === 'development') {
+        console.log('🚀 Initializing game...')
+      }
+      
+      // Set a fallback word immediately so game can start
+      const fallbackWord = getFallbackWord()
+      setTargetWord(fallbackWord)
+      setGameStatus("playing")
+      setWordSource("fallback")
+      
+      // Then try to get a better word from API in background
+      try {
+        const apiWord = await fetchWordFromAPI()
+        if (apiWord) {
+          if (process.env.NODE_ENV === 'development') {
+            console.log('🔄 Updating to API word:', apiWord)
+          }
+          setTargetWord(apiWord)
+          setWordSource("api")
+        }
+      } catch (error) {
+        if (process.env.NODE_ENV === 'development') {
+          console.log('Staying with fallback word')
+        }
+      }
+    }
+    
+    initializeGame()
+  }, [])
+
+  // Enhanced word validation (production optimized)
   const validateWord = async (word: string): Promise<boolean> => {
     try {
-      const response = await fetch(`https://api.dictionaryapi.dev/api/v2/entries/en/${word.toLowerCase()}`)
-      return response.ok
-    } catch {
-      // Expanded fallback word list for demo
-      const validWords = [
-        "ABOUT", "HOUSE", "PLANT", "MUSIC", "WORLD", "LIGHT", "HAPPY", "DREAM",
-        "PEACE", "SMILE", "BRAVE", "HEART", "MAGIC", "POWER", "SOUND", "GRACE",
-        "REACT", "ADAPT", "CEASE", "WATER", "STONE", "FLAME", "STORM", "OCEAN",
-        "SPACE", "FRESH", "QUIET", "STORY", "TRUST", "NIGHT", "SPARK", "BLOOM"
+      // Always allow the target word
+      if (word.toUpperCase() === targetWord.toUpperCase()) {
+        if (process.env.NODE_ENV === 'development') {
+          console.log('✅ Target word is always valid:', word)
+        }
+        return true
+      }
+      
+      // Check against known words first (instant)
+      if (FALLBACK_WORDS.includes(word.toUpperCase())) {
+        return true
+      }
+      
+      // Extended common words that might come from API
+      const commonAPIWords = [
+        "STORM", "FLARE", "GLOBE", "BLEND", "CRISP", "FROST", "GLIDE", "SWEPT",
+        "THUMB", "TWIST", "QUIRK", "BLITZ", "FJORD", "ZESTY", "WALTZ", "CHARM",
+        "DRIFT", "GROVE", "MARSH", "PERCH", "RIDGE", "SPARK", "SPIKE", "SPIRE",
+        "STERN", "SWAMP", "SWING", "THYME", "TORCH", "TRACE", "TREND", "TRUCE",
+        "APPLE", "BRAVE", "CRANE", "DRAPE", "EAGLE", "FABLE", "GRACE", "HORSE",
+        "IMAGE", "JUICE", "KNIFE", "LARGE", "MAPLE", "NOBLE", "OLIVE", "PEACE",
+        "QUOTE", "RAISE", "SMILE", "TOWER", "UNDER", "VOICE", "WHALE", "YOUNG"
       ]
-      return validWords.includes(word.toUpperCase())
+      
+      if (commonAPIWords.includes(word.toUpperCase())) {
+        if (process.env.NODE_ENV === 'development') {
+          console.log('✅ Common API word accepted:', word)
+        }
+        return true
+      }
+      
+      // Then try dictionary API with timeout
+      const controller = new AbortController()
+      const timeoutId = setTimeout(() => controller.abort(), 3000)
+      
+      const response = await fetch(`https://api.dictionaryapi.dev/api/v2/entries/en/${word.toLowerCase()}`, {
+        signal: controller.signal
+      })
+      
+      clearTimeout(timeoutId)
+      
+      if (response.ok) {
+        if (process.env.NODE_ENV === 'development') {
+          console.log('✅ Word validated by dictionary:', word)
+        }
+        return true
+      } else {
+        if (process.env.NODE_ENV === 'development') {
+          console.log('❌ Word not in dictionary:', word)
+        }
+        return false
+      }
+    } catch (error) {
+      if (process.env.NODE_ENV === 'development') {
+        console.warn('Word validation failed, checking fallback list:', error)
+      }
+      return FALLBACK_WORDS.includes(word.toUpperCase())
     }
   }
 
@@ -222,7 +311,6 @@ export function useGameLogic() {
     updateKeyboardStatus(currentGuess)
 
     try {
-      // Save to localStorage with error handling
       localStorage.setItem("wordle-guesses", JSON.stringify(newGuesses))
     } catch (error) {
       console.error("Error saving guesses:", error)
@@ -239,13 +327,36 @@ export function useGameLogic() {
     setCurrentGuess("")
   }, [currentGuess, guesses, gameStatus, targetWord, updateKeyboardStatus])
 
-  const resetGame = useCallback(() => {
-    setTargetWord(getRandomWord()) // Pick new random word
+  const resetGame = useCallback(async () => {
+    if (process.env.NODE_ENV === 'development') {
+      console.log('🔄 Resetting game...')
+    }
+    
+    // Immediately reset to playable state
     setCurrentGuess("")
     setGuesses([])
     setCurrentRow(0)
     setGameStatus("playing")
     setKeyboardStatus({})
+    
+    // Set fallback word immediately
+    const fallbackWord = getFallbackWord()
+    setTargetWord(fallbackWord)
+    setWordSource("fallback")
+    
+    // Try to get API word in background
+    try {
+      const apiWord = await fetchWordFromAPI()
+      if (apiWord) {
+        setTargetWord(apiWord)
+        setWordSource("api")
+      }
+    } catch (error) {
+      if (process.env.NODE_ENV === 'development') {
+        console.log('Using fallback word for new game')
+      }
+    }
+    
     try {
       localStorage.removeItem("wordle-guesses")
     } catch (error) {
@@ -259,7 +370,8 @@ export function useGameLogic() {
     currentRow,
     gameStatus,
     keyboardStatus,
-    targetWord, // Return targetWord so it can be passed to GameGrid
+    targetWord,
+    wordSource,
     handleKeyPress,
     submitGuess,
     resetGame,
