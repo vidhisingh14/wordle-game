@@ -8,6 +8,7 @@ import { VirtualKeyboard } from "@/components/virtual-keyboard"
 import { useGameLogic } from "@/hooks/use-game-logic"
 import { useUnifiedTimeTracking } from "@/hooks/use-unified-time-tracking"
 import { TimeStatsModal } from "@/components/time-stats-modal"
+import { GameNotification } from "@/components/ui/game-notification"
 import { useAuth } from "@/contexts/AuthContext"
 
 export default function GamePage() {
@@ -15,7 +16,7 @@ export default function GamePage() {
   const [showTimeStats, setShowTimeStats] = useState(false)
   const { user, signOut, isGuest } = useAuth()
   const { currentTime, timeStats, isActive } = useUnifiedTimeTracking()
-  const { currentGuess, guesses, currentRow, gameStatus, keyboardStatus, targetWord, handleKeyPress, submitGuess, resetGame } =
+  const { currentGuess, guesses, currentRow, gameStatus, keyboardStatus, targetWord, handleKeyPress, submitGuess, resetGame, notification, hideNotification } =
     useGameLogic()
 
   const handleKeyDown = useCallback(
@@ -238,6 +239,14 @@ export default function GamePage() {
           <VirtualKeyboard onKeyPress={handleKeyPress} onEnter={submitGuess} keyboardStatus={keyboardStatus} />
         </div>
       </main>
+
+      {/* Game Notification */}
+      <GameNotification
+        message={notification.message}
+        type={notification.type}
+        isVisible={notification.isVisible}
+        onClose={hideNotification}
+      />
     </div>
   )
 }
