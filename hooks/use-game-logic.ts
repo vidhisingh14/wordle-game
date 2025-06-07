@@ -59,20 +59,23 @@ export function useGameLogic() {
   }
 
   // Fetch word from API Ninjas with timeout (your exact working logic)
-  const fetchWordFromAPI = async (): Promise<string | null> => {
+  const fetchWordFromAPI = async (retryCount = 0): Promise<string | null> => {
     const apiKey = getApiKey()
     if (!apiKey) {
       return null
     }
-
+    if (retryCount > 10) {
+      if (process.env.NODE_ENV === 'development') {
+        console.warn('⚠ Maximum retries reached for API word fetch. Using fallback.')
+      }
+      return null
+    }
     try {
       if (process.env.NODE_ENV === 'development') {
         console.log('🔍 Fetching word from API Ninjas...')
       }
-      
       const controller = new AbortController()
       const timeoutId = setTimeout(() => controller.abort(), 5000)
-      
       const response = await fetch('https://api.api-ninjas.com/v1/randomword', {
         method: 'GET',
         headers: {
@@ -81,18 +84,13 @@ export function useGameLogic() {
         },
         signal: controller.signal
       })
-      
       clearTimeout(timeoutId)
-      
       if (response.ok) {
         const data = await response.json()
-        
         if (process.env.NODE_ENV === 'development') {
           console.log('🔍 Raw API response:', data)
         }
-        
         let word = null
-        
         if (data.word && Array.isArray(data.word) && data.word.length > 0) {
           word = String(data.word[0]).toUpperCase()
           if (process.env.NODE_ENV === 'development') {
@@ -107,11 +105,10 @@ export function useGameLogic() {
           word = data.toUpperCase()
         } else {
           if (process.env.NODE_ENV === 'development') {
-            console.warn('⚠️ Unexpected API response format:', data)
+            console.warn('⚠ Unexpected API response format:', data)
           }
           return null
         }
-        
         if (word && word.length === 5 && /^[A-Z]+$/.test(word)) {
           if (process.env.NODE_ENV === 'development') {
             console.log('✅ Got 5-letter word from API:', word)
@@ -119,10 +116,10 @@ export function useGameLogic() {
           return word
         } else {
           if (process.env.NODE_ENV === 'development') {
-            console.log(`⚠️ API returned ${word?.length || 0}-letter word: ${word}, trying again...`)
+            console.log(`⚠ API returned ${word?.length || 0}-letter word: ${word}, trying again...`)
           }
-          // If not 5 letters, try again (your original infinite retry logic)
-          return await fetchWordFromAPI()
+          // If not 5 letters, try again (limit retries)
+          return await fetchWordFromAPI(retryCount + 1)
         }
       } else {
         if (process.env.NODE_ENV === 'development') {

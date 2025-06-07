@@ -16,9 +16,10 @@ interface TimeStatsModalProps {
     total?: number
     currentSession: number
   }
+  isLoading?: boolean
 }
 
-export function TimeStatsModal({ open, onOpenChange, currentTime, timeStats }: TimeStatsModalProps) {
+export function TimeStatsModal({ open, onOpenChange, currentTime, timeStats, isLoading = false }: TimeStatsModalProps) {
   const { user, isGuest } = useAuth()
 
   const formatTime = (seconds: number) => {
@@ -75,37 +76,43 @@ export function TimeStatsModal({ open, onOpenChange, currentTime, timeStats }: T
             <div className="space-y-4">
               <h3 className="text-lg font-wordle-bold mb-3">Statistics</h3>
 
-              <div className="grid grid-cols-1 gap-3">
-                <div className="flex justify-between items-center p-3 bg-gray-800 rounded-lg">
-                  <span className="font-wordle-medium">Today:</span>
-                  <span className="font-wordle-bold text-blue-400">
-                    {formatTime(timeStats.daily + currentTime)}
-                  </span>
+              {isLoading ? (
+                <div className="text-center py-8">
+                  <div className="text-gray-400">Loading stats...</div>
                 </div>
-
-                <div className="flex justify-between items-center p-3 bg-gray-800 rounded-lg">
-                  <span className="font-wordle-medium">This Week:</span>
-                  <span className="font-wordle-bold text-yellow-400">
-                    {formatTime(timeStats.weekly + currentTime)}
-                  </span>
-                </div>
-
-                <div className="flex justify-between items-center p-3 bg-gray-800 rounded-lg">
-                  <span className="font-wordle-medium">This Month:</span>
-                  <span className="font-wordle-bold text-purple-400">
-                    {formatTime(timeStats.monthly + currentTime)}
-                  </span>
-                </div>
-
-                {user && timeStats.total !== undefined && (
+              ) : (
+                <div className="grid grid-cols-1 gap-3">
                   <div className="flex justify-between items-center p-3 bg-gray-800 rounded-lg">
-                    <span className="font-wordle-medium">Total Time:</span>
-                    <span className="font-wordle-bold text-green-400">
-                      {formatTime(timeStats.total + currentTime)}
+                    <span className="font-wordle-medium">Today:</span>
+                    <span className="font-wordle-bold text-blue-400">
+                      {formatTime(timeStats.daily + currentTime)}
                     </span>
                   </div>
-                )}
-              </div>
+
+                  <div className="flex justify-between items-center p-3 bg-gray-800 rounded-lg">
+                    <span className="font-wordle-medium">This Week:</span>
+                    <span className="font-wordle-bold text-yellow-400">
+                      {formatTime(timeStats.weekly + currentTime)}
+                    </span>
+                  </div>
+
+                  <div className="flex justify-between items-center p-3 bg-gray-800 rounded-lg">
+                    <span className="font-wordle-medium">This Month:</span>
+                    <span className="font-wordle-bold text-purple-400">
+                      {formatTime(timeStats.monthly + currentTime)}
+                    </span>
+                  </div>
+
+                  {user && timeStats.total !== undefined && (
+                    <div className="flex justify-between items-center p-3 bg-gray-800 rounded-lg">
+                      <span className="font-wordle-medium">Total Time:</span>
+                      <span className="font-wordle-bold text-green-400">
+                        {formatTime(timeStats.total + currentTime)}
+                      </span>
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
 
             {/* User Info */}
