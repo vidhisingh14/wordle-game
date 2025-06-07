@@ -1,7 +1,6 @@
 "use client"
 
 import { useState, useEffect, useCallback, useRef } from "react"
-import { createClientComponentClient } from '@supabase/auth-helpers-nextjs'
 
 interface TimeStats {
   daily: number
@@ -28,39 +27,49 @@ export function useTimeTracking() {
   })
   const [isActive, setIsActive] = useState(false)
   const [user, setUser] = useState<User | null>(null)
-  const [isClient, setIsClient] = useState(false)
 
   const intervalRef = useRef<NodeJS.Timeout | null>(null)
   const startTimeRef = useRef<number | null>(null)
-  const supabase = createClientComponentClient()
 
-  // Wait for client-side hydration
-  useEffect(() => {
-    setIsClient(true)
+  // SIMPLE: Get current user identifier
+  const getUserId = useCallback(() => {
+    try {
+      // Check localStorage values
+      const userData = localStorage.getItem('user')
+      const guestMode = localStorage.getItem('guestMode')
+      
+      console.log('🔍 Checking user state:')
+      console.log('  - userData:', userData)
+      console.log('  - guestMode:', guestMode)
+      
+      // If explicitly in guest mode, return guest
+      if (guestMode === 'true') {
+        console.log('  → Guest mode detected')
+        return 'guest_mode'
+      }
+      
+      // If we have user data and NOT in guest mode, return authenticated user
+      if (userData && guestMode !== 'true') {
+        const parsed = JSON.parse(userData)
+        const userId = `auth_${parsed.email}`
+        console.log('  → Authenticated user:', userId)
+        return userId
+      }
+      
+      console.log('  → No user detected')
+      return null
+    } catch (error) {
+      console.error('Error getting user ID:', error)
+      return null
+    }
   }, [])
 
-  // Get current user from Supabase
-  const getUser = useCallback(async () => {
-    if (!isClient) return null
-    
+  // SIMPLE: Get user object
+  const getUser = useCallback(() => {
     try {
-      const { data: { user: authUser }, error } = await supabase.auth.getUser()
-      
-      if (error) {
-        console.error('Error getting user:', error)
-        return null
-      }
-      
-      if (authUser) {
-        return {
-          id: authUser.id,
-          email: authUser.email || '',
-          name: authUser.user_metadata?.full_name || authUser.user_metadata?.name
-        }
-      }
-      
-      // Check for guest mode in localStorage as fallback
       const guestMode = localStorage.getItem('guestMode')
+      
+      // Check guest mode first
       if (guestMode === 'true') {
         return {
           id: 'guest_mode',
@@ -69,59 +78,60 @@ export function useTimeTracking() {
         }
       }
       
+      // Then check for authenticated user
+      const userData = localStorage.getItem('user')
+      if (userData) {
+        const parsed = JSON.parse(userData)
+        return {
+          id: `auth_${parsed.email}`,
+          email: parsed.email,
+          name: parsed.name || parsed.user_metadata?.full_name
+        }
+      }
+      
       return null
     } catch (error) {
       console.error('Error getting user:', error)
       return null
     }
-  }, [supabase, isClient])
+  }, [])
 
-  // Load user's time data from Supabase
-  const loadTimeData = useCallback(async (userId: string) => {
-    if (!isClient || userId === 'guest_mode') {
-      // For guest mode, use localStorage
-      try {
-        const data = localStorage.getItem(`wordle_${userId}`)
-        if (data) {
-          const parsed = JSON.parse(data)
-          setTimeStats({
-            daily: Math.floor((parsed.daily || 0) / 1000),
-            weekly: Math.floor((parsed.weekly || 0) / 1000),
-            monthly: Math.floor((parsed.monthly || 0) / 1000),
-            total: Math.floor((parsed.total || 0) / 1000),
-            currentSession: 0
-          })
-        }
-      } catch (error) {
-        console.error('Error loading guest data:', error)
-      }
-      return
-    }
+  // SIMPLE: Get storage key for user
+  const getStorageKey = useCallback((userId: string) => {
+    return `wordle_${userId}`
+  }, [])
 
+  // SIMPLE: Get today's date
+  const getToday = useCallback(() => {
+    return new Date().toISOString().split('T')[0]
+  }, [])
+
+  // SIMPLE: Load user's time data
+  const loadTimeData = useCallback((userId: string) => {
     try {
-      const today = new Date().toISOString().split('T')[0]
+      const key = getStorageKey(userId)
+      const data = localStorage.getItem(key)
       
-      const { data, error } = await supabase
-        .rpc('get_user_time_summary', { 
-          p_user_id: userId,
-          p_date: today
-        })
-      
-      if (error) {
-        console.error('Error loading time data:', error)
-        return
-      }
-      
-      if (data && data.length > 0) {
-        const stats = data[0]
+      if (data) {
+        const parsed = JSON.parse(data)
+        const today = getToday()
+        
         setTimeStats({
-          daily: stats.daily_seconds || 0,
-          weekly: stats.weekly_seconds || 0,
-          monthly: stats.monthly_seconds || 0,
-          total: stats.total_seconds || 0,
+          daily: Math.floor((parsed.daily || 0) / 1000),
+          weekly: Math.floor((parsed.weekly || 0) / 1000),
+          monthly: Math.floor((parsed.monthly || 0) / 1000),
+          total: Math.floor((parsed.total || 0) / 1000),
           currentSession: 0
         })
+        
+        console.log(`📊 Loaded data for ${userId}:`, {
+          daily: Math.floor((parsed.daily || 0) / 1000),
+          weekly: Math.floor((parsed.weekly || 0) / 1000),
+          monthly: Math.floor((parsed.monthly || 0) / 1000),
+          total: Math.floor((parsed.total || 0) / 1000)
+        })
       } else {
+        // No data - start fresh
         setTimeStats({
           daily: 0,
           weekly: 0,
@@ -129,112 +139,55 @@ export function useTimeTracking() {
           total: 0,
           currentSession: 0
         })
+        console.log(`🆕 Fresh start for ${userId}`)
       }
     } catch (error) {
       console.error('Error loading time data:', error)
+      setTimeStats({
+        daily: 0,
+        weekly: 0,
+        monthly: 0,
+        total: 0,
+        currentSession: 0
+      })
     }
-  }, [supabase, isClient])
+  }, [getStorageKey, getToday])
 
-  // Save session to Supabase or localStorage
-  const saveSession = useCallback(async (userId: string, duration: number) => {
+  // SIMPLE: Save session for user
+  const saveSession = useCallback((userId: string, duration: number) => {
     if (duration < 1000) return
     
-    if (!isClient) return
-    
-    if (userId === 'guest_mode') {
-      // Save to localStorage for guest
-      try {
-        const key = `wordle_${userId}`
-        const existing = localStorage.getItem(key)
-        const data = existing ? JSON.parse(existing) : {}
-        
-        data.daily = (data.daily || 0) + duration
-        data.weekly = (data.weekly || 0) + duration
-        data.monthly = (data.monthly || 0) + duration
-        data.total = (data.total || 0) + duration
-        
-        localStorage.setItem(key, JSON.stringify(data))
-        
-        setTimeStats({
-          daily: Math.floor(data.daily / 1000),
-          weekly: Math.floor(data.weekly / 1000),
-          monthly: Math.floor(data.monthly / 1000),
-          total: Math.floor(data.total / 1000),
-          currentSession: 0
-        })
-      } catch (error) {
-        console.error('Error saving guest session:', error)
-      }
-      return
-    }
-
     try {
-      const now = new Date()
-      const sessionId = `session_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
+      const key = getStorageKey(userId)
+      const existing = localStorage.getItem(key)
+      const data = existing ? JSON.parse(existing) : {}
       
-      // Insert session record
-      const { error: sessionError } = await supabase
-        .from('time_sessions')
-        .insert({
-          user_id: userId,
-          session_id: sessionId,
-          start_time: new Date(now.getTime() - duration).toISOString(),
-          end_time: now.toISOString(),
-          duration: Math.floor(duration / 1000), // Convert to seconds
-          date: now.toISOString().split('T')[0]
-        })
-
-      if (sessionError) {
-        console.error('Error saving session:', sessionError)
-        return
-      }
-
-      // Update user time stats
-      const today = now.toISOString().split('T')[0]
-      const weekStart = getWeekStart(now)
-      const monthKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
-      const yearKey = now.getFullYear().toString()
-
-      const { error: statsError } = await supabase
-        .from('user_time_stats')
-        .upsert({
-          user_id: userId,
-          date_key: today,
-          week_key: weekStart,
-          month_key: monthKey,
-          year_key: yearKey,
-          daily_time: duration,
-          weekly_time: duration,
-          monthly_time: duration,
-          total_time: duration,
-          session_count: 1,
-          last_active: now.toISOString()
-        }, {
-          onConflict: 'user_id,date_key',
-          ignoreDuplicates: false
-        })
-
-      if (statsError) {
-        console.error('Error updating stats:', statsError)
-      }
-
+      // Add session duration to all time periods
+      data.daily = (data.daily || 0) + duration
+      data.weekly = (data.weekly || 0) + duration
+      data.monthly = (data.monthly || 0) + duration
+      data.total = (data.total || 0) + duration
+      
+      localStorage.setItem(key, JSON.stringify(data))
+      
+      // Update display immediately
+      setTimeStats({
+        daily: Math.floor(data.daily / 1000),
+        weekly: Math.floor(data.weekly / 1000),
+        monthly: Math.floor(data.monthly / 1000),
+        total: Math.floor(data.total / 1000),
+        currentSession: 0
+      })
+      
       console.log(`💾 Saved ${Math.floor(duration / 1000)}s for ${userId}`)
     } catch (error) {
       console.error('Error saving session:', error)
     }
-  }, [supabase, isClient])
+  }, [getStorageKey])
 
-  // Helper function to get week start (Monday)
-  const getWeekStart = (date: Date): string => {
-    const d = new Date(date)
-    const day = d.getDay()
-    const diff = d.getDate() - day + (day === 0 ? -6 : 1) // Monday as start
-    return new Date(d.setDate(diff)).toISOString().split('T')[0]
-  }
-
-  // Start timer
+  // SIMPLE: Start timer
   const startTimer = useCallback(() => {
-    if (isActive || !user || !isClient) return
+    if (isActive || !user) return
     
     console.log(`▶️ Starting timer for ${user.id}`)
     setIsActive(true)
@@ -247,11 +200,11 @@ export function useTimeTracking() {
         setCurrentTime(elapsed)
       }
     }, 1000)
-  }, [isActive, user, isClient])
+  }, [isActive, user])
 
-  // Stop timer
+  // SIMPLE: Stop timer
   const stopTimer = useCallback(() => {
-    if (!isActive || !startTimeRef.current || !user || !isClient) return
+    if (!isActive || !startTimeRef.current || !user) return
     
     console.log(`⏹️ Stopping timer for ${user.id}`)
     setIsActive(false)
@@ -268,24 +221,67 @@ export function useTimeTracking() {
     if (duration >= 1000) {
       saveSession(user.id, duration)
     }
-  }, [isActive, user, saveSession, isClient])
+  }, [isActive, user, saveSession])
 
-  // Initialize user and start timer
+  // SIMPLE: Initialize immediately
   useEffect(() => {
-    if (!isClient) return
-
-    const initializeUser = async () => {
-      const currentUser = await getUser()
-      console.log('👤 User:', currentUser)
-      
-      setUser(currentUser)
-      
-      if (currentUser) {
-        await loadTimeData(currentUser.id)
+    const currentUser = getUser()
+    console.log('👤 User:', currentUser)
+    
+    setUser(currentUser)
+    
+    if (currentUser) {
+      loadTimeData(currentUser.id)
+      // Start timer immediately
+      setTimeout(() => {
+        setIsActive(true)
+        setCurrentTime(0)
+        startTimeRef.current = Date.now()
         
-        // Start timer after a short delay
-        setTimeout(() => {
-          if (!isActive) {
+        intervalRef.current = setInterval(() => {
+          if (startTimeRef.current) {
+            const elapsed = Math.floor((Date.now() - startTimeRef.current) / 1000)
+            setCurrentTime(elapsed)
+          }
+        }, 1000)
+      }, 100)
+    }
+  }, []) // Only run once
+
+  // SIMPLE: Watch for user changes by checking localStorage directly
+  useEffect(() => {
+    const checkUserChange = () => {
+      const currentUserId = getUserId()
+      const stateUserId = user?.id || null
+      
+      if (currentUserId !== stateUserId) {
+        console.log(`🔄 User changed: ${stateUserId} → ${currentUserId}`)
+        
+        // Save current session
+        if (isActive && startTimeRef.current && user) {
+          const duration = Date.now() - startTimeRef.current
+          if (duration >= 1000) {
+            saveSession(user.id, duration)
+          }
+        }
+        
+        // Stop timer
+        if (intervalRef.current) {
+          clearInterval(intervalRef.current)
+          intervalRef.current = null
+        }
+        setIsActive(false)
+        setCurrentTime(0)
+        startTimeRef.current = null
+        
+        // Switch to new user
+        const newUser = getUser()
+        setUser(newUser)
+        
+        if (newUser) {
+          loadTimeData(newUser.id)
+          // Start timer for new user
+          setTimeout(() => {
             setIsActive(true)
             setCurrentTime(0)
             startTimeRef.current = Date.now()
@@ -296,18 +292,19 @@ export function useTimeTracking() {
                 setCurrentTime(elapsed)
               }
             }, 1000)
-          }
-        }, 100)
+          }, 100)
+        }
       }
     }
+    
+    // Check every 2 seconds
+    const interval = setInterval(checkUserChange, 2000)
+    
+    return () => clearInterval(interval)
+  }, [user, isActive, getUserId, getUser, loadTimeData, saveSession])
 
-    initializeUser()
-  }, [isClient]) // Only depend on isClient
-
-  // Handle page visibility changes
+  // SIMPLE: Handle page visibility
   useEffect(() => {
-    if (!isClient) return
-
     const handleVisibilityChange = () => {
       if (document.hidden) {
         stopTimer()
@@ -327,43 +324,9 @@ export function useTimeTracking() {
       document.removeEventListener('visibilitychange', handleVisibilityChange)
       window.removeEventListener('beforeunload', handleBeforeUnload)
     }
-  }, [user, startTimer, stopTimer, isClient])
+  }, [user, startTimer, stopTimer])
 
-  // Listen for auth changes
-  useEffect(() => {
-    if (!isClient) return
-
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
-      console.log('Auth state changed:', event, session?.user?.id)
-      
-      if (event === 'SIGNED_OUT') {
-        // Stop current timer and clear user
-        stopTimer()
-        setUser(null)
-        setTimeStats({
-          daily: 0,
-          weekly: 0,
-          monthly: 0,
-          total: 0,
-          currentSession: 0
-        })
-      } else if (event === 'SIGNED_IN' && session?.user) {
-        // Load new user data
-        const newUser = {
-          id: session.user.id,
-          email: session.user.email || '',
-          name: session.user.user_metadata?.full_name || session.user.user_metadata?.name
-        }
-        setUser(newUser)
-        await loadTimeData(newUser.id)
-        startTimer()
-      }
-    })
-
-    return () => subscription.unsubscribe()
-  }, [supabase, startTimer, stopTimer, loadTimeData, isClient])
-
-  // Cleanup
+  // SIMPLE: Cleanup
   useEffect(() => {
     return () => {
       if (intervalRef.current) {
@@ -371,23 +334,6 @@ export function useTimeTracking() {
       }
     }
   }, [])
-
-  // Don't return anything until client-side hydration is complete
-  if (!isClient) {
-    return {
-      currentTime: 0,
-      timeStats: {
-        daily: 0,
-        weekly: 0,
-        monthly: 0,
-        total: 0,
-        currentSession: 0
-      },
-      isActive: false,
-      user: null,
-      connectionStatus: 'offline' as const
-    }
-  }
 
   return {
     currentTime,
