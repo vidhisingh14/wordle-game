@@ -6,6 +6,35 @@ type GameStatus = "playing" | "won" | "lost" | "loading"
 type KeyStatus = "correct" | "present" | "absent" | "unused"
 
 export function useGameLogic() {
+  // Add notification state directly in the hook
+  const [notification, setNotification] = useState<{
+    message: string
+    type: "error" | "success" | "warning" | "info"
+    isVisible: boolean
+  }>({
+    message: "",
+    type: "error",
+    isVisible: false
+  })
+
+  const showNotification = useCallback((
+    message: string, 
+    type: "error" | "success" | "warning" | "info" = "error"
+  ) => {
+    setNotification({
+      message,
+      type,
+      isVisible: true
+    })
+  }, [])
+
+  const hideNotification = useCallback(() => {
+    setNotification(prev => ({
+      ...prev,
+      isVisible: false
+    }))
+  }, [])
+
   // 50 high-quality fallback words for production
   const FALLBACK_WORDS = [
     "REACT", "LIGHT", "WORLD", "HOUSE", "MUSIC", "ADAPT", "CEASE", "PLANT",
@@ -66,7 +95,7 @@ export function useGameLogic() {
     }
     if (retryCount > 10) {
       if (process.env.NODE_ENV === 'development') {
-        console.warn('⚠ Maximum retries reached for API word fetch. Using fallback.')
+        console.warn('⚠️ Maximum retries reached for API word fetch. Using fallback.')
       }
       return null
     }
@@ -105,7 +134,7 @@ export function useGameLogic() {
           word = data.toUpperCase()
         } else {
           if (process.env.NODE_ENV === 'development') {
-            console.warn('⚠ Unexpected API response format:', data)
+            console.warn('⚠️ Unexpected API response format:', data)
           }
           return null
         }
@@ -116,7 +145,7 @@ export function useGameLogic() {
           return word
         } else {
           if (process.env.NODE_ENV === 'development') {
-            console.log(`⚠ API returned ${word?.length || 0}-letter word: ${word}, trying again...`)
+            console.log(`⚠️ API returned ${word?.length || 0}-letter word: ${word}, trying again...`)
           }
           // If not 5 letters, try again (limit retries)
           return await fetchWordFromAPI(retryCount + 1)
@@ -299,7 +328,8 @@ export function useGameLogic() {
 
     const isValid = await validateWord(currentGuess)
     if (!isValid) {
-      alert("Not a valid word!")
+      // Replace alert with smooth notification
+      showNotification("Not a valid word!", "error")
       return
     }
 
@@ -315,14 +345,16 @@ export function useGameLogic() {
 
     if (currentGuess === targetWord) {
       setGameStatus("won")
+      showNotification("Congratulations! 🎉", "success")
     } else if (newGuesses.length >= 6) {
       setGameStatus("lost")
+      showNotification(`The word was: ${targetWord}`, "info")
     } else {
       setCurrentRow((prev) => prev + 1)
     }
 
     setCurrentGuess("")
-  }, [currentGuess, guesses, gameStatus, targetWord, updateKeyboardStatus])
+  }, [currentGuess, guesses, gameStatus, targetWord, updateKeyboardStatus, showNotification])
 
   const resetGame = useCallback(async () => {
     if (process.env.NODE_ENV === 'development') {
@@ -372,5 +404,7 @@ export function useGameLogic() {
     handleKeyPress,
     submitGuess,
     resetGame,
+    notification,
+    hideNotification
   }
 }
