@@ -5,6 +5,21 @@ import { useState, useCallback, useEffect } from "react"
 type GameStatus = "playing" | "won" | "lost" | "loading"
 type KeyStatus = "correct" | "present" | "absent" | "unused"
 
+interface GameState {
+  currentGuess: string
+  guesses: string[]
+  currentRow: number
+  gameStatus: GameStatus
+  keyboardStatus: Record<string, KeyStatus>
+  targetWord: string
+  wordSource: "api" | "fallback"
+  userId?: string
+}
+
+// Separate storage keys for guest and authenticated users
+const GUEST_GAME_STATE_KEY = "wordle-guest-game-state"
+const AUTH_GAME_STATE_KEY = "wordle-auth-game-state"
+
 export function useGameLogic() {
   // Add notification state directly in the hook
   const [notification, setNotification] = useState<{
@@ -53,6 +68,120 @@ export function useGameLogic() {
   const [keyboardStatus, setKeyboardStatus] = useState<Record<string, KeyStatus>>({})
   const [targetWord, setTargetWord] = useState<string>("")
   const [wordSource, setWordSource] = useState<"api" | "fallback">("fallback")
+
+  // Get the appropriate storage key based on user type
+  const getStorageKey = useCallback(() => {
+    const isGuest = typeof window !== 'undefined' && sessionStorage.getItem('guestMode') === 'true'
+    return isGuest ? GUEST_GAME_STATE_KEY : AUTH_GAME_STATE_KEY
+  }, [])
+
+  // Load game state from sessionStorage
+  const loadGameState = useCallback((): GameState | null => {
+    try {
+      const storageKey = getStorageKey()
+      const savedState = sessionStorage.getItem(storageKey)
+      if (savedState) {
+        const gameState = JSON.parse(savedState) as GameState
+        // Validate the loaded state
+        if (gameState.targetWord && 
+            Array.isArray(gameState.guesses) && 
+            typeof gameState.currentRow === 'number' && 
+            typeof gameState.gameStatus === 'string' &&
+            typeof gameState.keyboardStatus === 'object') {
+          if (process.env.NODE_ENV === 'development') {
+            console.log('📄 Loaded game state from sessionStorage:', gameState)
+          }
+          return gameState
+        }
+      }
+    } catch (error) {
+      console.error("Error loading game state:", error)
+    }
+    return null
+  }, [getStorageKey])
+
+  // Save game state to sessionStorage
+  const saveGameState = useCallback((state: Partial<GameState>) => {
+    try {
+      const storageKey = getStorageKey()
+      const currentState: GameState = {
+        currentGuess,
+        guesses,
+        currentRow,
+        gameStatus,
+        keyboardStatus,
+        targetWord,
+        wordSource,
+        ...state
+      }
+      // Only save if we have a valid game state
+      if (currentState.targetWord) {
+        sessionStorage.setItem(storageKey, JSON.stringify(currentState))
+        if (process.env.NODE_ENV === 'development') {
+          console.log('💾 Saved game state to sessionStorage:', currentState)
+        }
+      }
+    } catch (error) {
+      console.error("Error saving game state:", error)
+    }
+  }, [currentGuess, guesses, currentRow, gameStatus, keyboardStatus, targetWord, wordSource, getStorageKey])
+
+  // Save state whenever it changes
+  useEffect(() => {
+    if (targetWord) { // Only save if game is initialized
+      saveGameState({})
+    }
+  }, [currentGuess, guesses, currentRow, gameStatus, keyboardStatus, targetWord, wordSource, saveGameState])
+
+  // Initialize with saved state or new game
+  useEffect(() => {
+    const initializeGame = async () => {
+      if (process.env.NODE_ENV === 'development') {
+        console.log('🚀 Initializing game...')
+      }
+      // Try to load saved game state first
+      const savedState = loadGameState()
+      if (savedState && savedState.targetWord) {
+        if (process.env.NODE_ENV === 'development') {
+          console.log('🔄 Restoring saved game state')
+        }
+        // Restore all game state
+        setCurrentGuess(savedState.currentGuess || "")
+        setGuesses(savedState.guesses || [])
+        setCurrentRow(savedState.currentRow || 0)
+        setGameStatus(savedState.gameStatus || "playing")
+        setKeyboardStatus(savedState.keyboardStatus || {})
+        setTargetWord(savedState.targetWord)
+        setWordSource(savedState.wordSource || "fallback")
+        return
+      }
+      // No saved state, start new game
+      if (process.env.NODE_ENV === 'development') {
+        console.log('🆕 Starting new game')
+      }
+      // Set a fallback word immediately so game can start
+      const fallbackWord = getFallbackWord()
+      setTargetWord(fallbackWord)
+      setGameStatus("playing")
+      setWordSource("fallback")
+      // Then try to get a better word from API in background
+      try {
+        const apiWord = await fetchWordFromAPI()
+        if (apiWord) {
+          if (process.env.NODE_ENV === 'development') {
+            console.log('🔄 Updating to API word:', apiWord)
+          }
+          setTargetWord(apiWord)
+          setWordSource("api")
+        }
+      } catch (error) {
+        if (process.env.NODE_ENV === 'development') {
+          console.log('Staying with fallback word')
+        }
+      }
+    }
+    initializeGame()
+  }, [loadGameState])
 
   // Simple fallback word picker
   const getFallbackWord = (): string => {
@@ -194,39 +323,6 @@ export function useGameLogic() {
     return getFallbackWord()
   }
 
-  // Initialize with immediate fallback word, then try to get API word
-  useEffect(() => {
-    const initializeGame = async () => {
-      if (process.env.NODE_ENV === 'development') {
-        console.log('🚀 Initializing game...')
-      }
-      
-      // Set a fallback word immediately so game can start
-      const fallbackWord = getFallbackWord()
-      setTargetWord(fallbackWord)
-      setGameStatus("playing")
-      setWordSource("fallback")
-      
-      // Then try to get a better word from API in background
-      try {
-        const apiWord = await fetchWordFromAPI()
-        if (apiWord) {
-          if (process.env.NODE_ENV === 'development') {
-            console.log('🔄 Updating to API word:', apiWord)
-          }
-          setTargetWord(apiWord)
-          setWordSource("api")
-        }
-      } catch (error) {
-        if (process.env.NODE_ENV === 'development') {
-          console.log('Staying with fallback word')
-        }
-      }
-    }
-    
-    initializeGame()
-  }, [])
-
   // Enhanced word validation (production optimized)
   const validateWord = async (word: string): Promise<boolean> => {
     try {
@@ -337,12 +433,6 @@ export function useGameLogic() {
     setGuesses(newGuesses)
     updateKeyboardStatus(currentGuess)
 
-    try {
-      localStorage.setItem("wordle-guesses", JSON.stringify(newGuesses))
-    } catch (error) {
-      console.error("Error saving guesses:", error)
-    }
-
     if (currentGuess === targetWord) {
       setGameStatus("won")
       showNotification("Congratulations! 🎉", "success")
@@ -356,23 +446,30 @@ export function useGameLogic() {
     setCurrentGuess("")
   }, [currentGuess, guesses, gameStatus, targetWord, updateKeyboardStatus, showNotification])
 
+  // Clear game state for current user type only
+  const clearGameState = useCallback(() => {
+    try {
+      const storageKey = getStorageKey()
+      sessionStorage.removeItem(storageKey)
+    } catch (error: unknown) {
+      console.error("Error clearing game state:", error)
+    }
+  }, [getStorageKey])
+
   const resetGame = useCallback(async () => {
     if (process.env.NODE_ENV === 'development') {
       console.log('🔄 Resetting game...')
     }
-    
     // Immediately reset to playable state
     setCurrentGuess("")
     setGuesses([])
     setCurrentRow(0)
     setGameStatus("playing")
     setKeyboardStatus({})
-    
     // Set fallback word immediately
     const fallbackWord = getFallbackWord()
     setTargetWord(fallbackWord)
     setWordSource("fallback")
-    
     // Try to get API word in background
     try {
       const apiWord = await fetchWordFromAPI()
@@ -385,13 +482,9 @@ export function useGameLogic() {
         console.log('Using fallback word for new game')
       }
     }
-    
-    try {
-      localStorage.removeItem("wordle-guesses")
-    } catch (error) {
-      console.error("Error clearing game data:", error)
-    }
-  }, [])
+    // Clear saved game state for current user type only
+    clearGameState()
+  }, [clearGameState])
 
   return {
     currentGuess,
