@@ -1,6 +1,7 @@
 "use client"
 
 import { useState, useCallback, useEffect } from "react"
+import { useAuth } from "@/contexts/AuthContext"
 
 type GameStatus = "playing" | "won" | "lost" | "loading"
 type KeyStatus = "correct" | "present" | "absent" | "unused"
@@ -69,11 +70,31 @@ export function useGameLogic() {
   const [targetWord, setTargetWord] = useState<string>("")
   const [wordSource, setWordSource] = useState<"api" | "fallback">("fallback")
 
-  // Get the appropriate storage key based on user type
+  const { user, isGuest } = useAuth();
+
+  // Ensure a unique session id for guest users per session
+  const getGuestSessionId = () => {
+    if (typeof window === 'undefined') return '';
+    let guestSessionId = sessionStorage.getItem('wordle-guest-session-id');
+    if (!guestSessionId) {
+      guestSessionId = `guest_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+      sessionStorage.setItem('wordle-guest-session-id', guestSessionId);
+    }
+    return guestSessionId;
+  };
+
+  // Get the appropriate storage key based on user type and identity
   const getStorageKey = useCallback(() => {
-    const isGuest = typeof window !== 'undefined' && sessionStorage.getItem('guestMode') === 'true'
-    return isGuest ? GUEST_GAME_STATE_KEY : AUTH_GAME_STATE_KEY
-  }, [])
+    if (isGuest) {
+      return `wordle-guest-game-state-${getGuestSessionId()}`;
+    } else if (user) {
+      // Use user id or email for uniqueness
+      return `wordle-auth-game-state-${user.id || user.email}`;
+    } else {
+      // Fallback to a generic guest session
+      return `wordle-guest-game-state-${getGuestSessionId()}`;
+    }
+  }, [isGuest, user]);
 
   // Load game state from sessionStorage
   const loadGameState = useCallback((): GameState | null => {
